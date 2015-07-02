@@ -98,11 +98,19 @@
             }
             
             // See if the current line has a switch statement
-            NSRange switchRange = [textView.string rangeOfString:@"\\s+switch\\s*\\\(" options:NSRegularExpressionSearch range:NSMakeRange(newLineRange.location, self.session.wordStartLocation - newLineRange.location)];
-            if(switchRange.location == NSNotFound) {
-                return NO;
+            if ([[SCXcodeSwitchExpander sharedSwitchExpander] isSwift]) {
+                NSRange switchRange = [textView.string rangeOfString:@"\\s+switch\\s*\\\(" options:NSRegularExpressionSearch range:NSMakeRange(newLineRange.location, self.session.wordStartLocation - newLineRange.location)];
+                NSRange switchRangeWithouBrackets = [textView.string rangeOfString:@"\\s+switch" options:NSRegularExpressionSearch range:NSMakeRange(newLineRange.location, self.session.wordStartLocation - newLineRange.location)];
+                if(switchRange.location == NSNotFound && switchRangeWithouBrackets.location == NSNotFound) {
+                    return NO;
+                }
+            } else {
+                NSRange switchRange = [textView.string rangeOfString:@"\\s+switch\\s*\\\(" options:NSRegularExpressionSearch range:NSMakeRange(newLineRange.location, self.session.wordStartLocation - newLineRange.location)];
+                if(switchRange.location == NSNotFound) {
+                    return NO;
+                }
             }
-			
+            
             // Fetch the opening bracket for that switch statement
             NSUInteger openingBracketLocation = [textView.string rangeOfString:@"{" options:0 range:NSMakeRange(self.session.wordStartLocation, textView.string.length - self.session.wordStartLocation)].location;
 			if(openingBracketLocation == NSNotFound) {
@@ -148,9 +156,9 @@
                 if([switchContent rangeOfString:child.displayName].location == NSNotFound) {
                     if ([[SCXcodeSwitchExpander sharedSwitchExpander] isSwift]) {
                         NSString *childDisplayName = [self correctEnumConstantIfFromCocoa:[NSString stringWithFormat:@"%@",symbol] symbolName:symbolName cocoaEnumName:child.displayName];
-                        [replacementString appendString:[NSString stringWithFormat:@"case .%@: \n<#statement#>\nbreak\n\n", childDisplayName]];
+                        [replacementString appendString:[NSString stringWithFormat:@"case .%@: \n<#statements#>\n", childDisplayName]];
                     } else {
-                        [replacementString appendString:[NSString stringWithFormat:@"case %@: {\n<#statement#>\nbreak;\n}\n", child.displayName]];
+                        [replacementString appendString:[NSString stringWithFormat:@"case %@: {\n<#statements#>\nbreak;\n}\n", child.displayName]];
                     }
                 }
             }
@@ -161,16 +169,6 @@
 			switchContentRange = NSMakeRange(openingBracketLocation + 1, closingBracketLocation - openingBracketLocation - 1);
 			switchContent = [textView.string substringWithRange:switchContentRange];
 			
-            // Insert the default case if necessary
-            if([switchContent rangeOfString:@"default"].location == NSNotFound) {
-                if ([[SCXcodeSwitchExpander sharedSwitchExpander] isSwift]) {
-                    replacementString = [NSMutableString stringWithString:@"default: \nbreak\n\n"];
-                } else {
-                    replacementString = [NSMutableString stringWithString:@"default: {\nbreak;\n}\n"];
-                }
-                [textView insertText:replacementString replacementRange:NSMakeRange(switchContentRange.location + switchContentRange.length, 0)];
-                closingBracketLocation += replacementString.length;
-            }
             // Re-indent everything
 			NSRange reindentRange = NSMakeRange(openingBracketLocation, closingBracketLocation - openingBracketLocation + 2);
             [textView _indentInsertedTextIfNecessaryAtRange:reindentRange];
